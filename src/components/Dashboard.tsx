@@ -1,15 +1,16 @@
 import { useState, useMemo } from 'react';
-import { Client, Project, Transaction } from '../types';
-import { formatMoney, DateRangeState, getDateRange, isDateInRange } from '../utils';
+import { Client, Project, Transaction, Reminder } from '../types';
+import { formatMoney, DateRangeState, getDateRange, isDateInRange, daysUntil } from '../utils';
 import DateRangeSelector from './DateRangeSelector';
 
 interface DashboardProps {
   clients: Client[];
   projects: Project[];
   transactions: Transaction[];
+  reminders: Reminder[];
 }
 
-export default function Dashboard({ clients, projects, transactions }: DashboardProps) {
+export default function Dashboard({ clients, projects, transactions, reminders }: DashboardProps) {
   const [dateRange, setDateRange] = useState<DateRangeState>({
     range: 'month',
     startDate: '',
@@ -125,6 +126,34 @@ export default function Dashboard({ clients, projects, transactions }: Dashboard
               <div className="w-3 h-3 bg-red-400 rounded-sm" />
               <span className="text-xs text-gray-500">Расходы</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Reminders */}
+      {reminders.filter(r => !r.done && daysUntil(r.date) <= 7).length > 0 && (
+        <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 mb-6">
+          <h3 className="text-sm font-semibold text-amber-800 mb-2">🔔 Ближайшие напоминания</h3>
+          <div className="space-y-1">
+            {reminders
+              .filter(r => !r.done && daysUntil(r.date) <= 7)
+              .sort((a, b) => daysUntil(a.date) - daysUntil(b.date))
+              .slice(0, 3)
+              .map((r) => {
+                const days = daysUntil(r.date);
+                return (
+                  <div key={r.id} className="flex items-center justify-between text-sm">
+                    <span className="text-amber-800">{r.title}</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      days < 0 ? 'bg-red-100 text-red-700' :
+                      days === 0 ? 'bg-amber-200 text-amber-800' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {days < 0 ? `Просрочено` : days === 0 ? 'Сегодня' : `Через ${days} дн.`}
+                    </span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
