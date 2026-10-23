@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Page, Client, Project, Task, Transaction } from './types';
 import {
   loadData,
@@ -16,9 +16,14 @@ import Projects from './components/Projects';
 import Tasks from './components/Tasks';
 import Finances from './components/Finances';
 
+interface NavParams {
+  highlight?: string;
+}
+
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [navParams, setNavParams] = useState<NavParams>({});
 
   // Data state
   const [clients, setClients] = useState<Client[]>(() =>
@@ -35,32 +40,42 @@ export default function App() {
   );
 
   // Persist data to localStorage
-  useEffect(() => {
-    saveData(STORAGE_KEYS.clients, clients);
-  }, [clients]);
+  useEffect(() => { saveData(STORAGE_KEYS.clients, clients); }, [clients]);
+  useEffect(() => { saveData(STORAGE_KEYS.projects, projects); }, [projects]);
+  useEffect(() => { saveData(STORAGE_KEYS.tasks, tasks); }, [tasks]);
+  useEffect(() => { saveData(STORAGE_KEYS.transactions, transactions); }, [transactions]);
 
-  useEffect(() => {
-    saveData(STORAGE_KEYS.projects, projects);
-  }, [projects]);
-
-  useEffect(() => {
-    saveData(STORAGE_KEYS.tasks, tasks);
-  }, [tasks]);
-
-  useEffect(() => {
-    saveData(STORAGE_KEYS.transactions, transactions);
-  }, [transactions]);
+  // Navigation handler
+  const handleNavigate = useCallback((page: Page, params?: NavParams) => {
+    setCurrentPage(page);
+    setNavParams(params || {});
+  }, []);
 
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
         return <Dashboard clients={clients} projects={projects} transactions={transactions} />;
       case 'clients':
-        return <Clients clients={clients} onUpdate={setClients} />;
+        return (
+          <Clients
+            clients={clients}
+            projects={projects}
+            onUpdate={setClients}
+            highlightId={navParams.highlight}
+          />
+        );
       case 'projects':
         return <Projects projects={projects} clients={clients} onUpdate={setProjects} />;
       case 'tasks':
-        return <Tasks tasks={tasks} projects={projects} onUpdate={setTasks} />;
+        return (
+          <Tasks
+            tasks={tasks}
+            projects={projects}
+            clients={clients}
+            onUpdate={setTasks}
+            onNavigate={handleNavigate}
+          />
+        );
       case 'finances':
         return <Finances transactions={transactions} projects={projects} clients={clients} onUpdate={setTransactions} />;
       default:
@@ -73,7 +88,7 @@ export default function App() {
       {/* Sidebar */}
       <Sidebar
         currentPage={currentPage}
-        onNavigate={setCurrentPage}
+        onNavigate={(page) => handleNavigate(page)}
         isCollapsed={sidebarCollapsed}
       />
 

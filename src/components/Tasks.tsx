@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Task, Project } from '../types';
+import { Task, Project, Client } from '../types';
 import { generateId } from '../data';
+import { Page } from '../types';
 
 interface TasksProps {
   tasks: Task[];
   projects: Project[];
+  clients: Client[];
   onUpdate: (tasks: Task[]) => void;
+  onNavigate: (page: Page, params?: Record<string, string>) => void;
 }
 
-export default function Tasks({ tasks, projects, onUpdate }: TasksProps) {
+export default function Tasks({ tasks, projects, clients, onUpdate, onNavigate }: TasksProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState<string>('all');
@@ -23,7 +26,6 @@ export default function Tasks({ tasks, projects, onUpdate }: TasksProps) {
 
   const filteredTasks = tasks.filter((t) => {
     if (filter === 'all') return true;
-    if (filter === 'project') return t.projectId !== '';
     return t.status === filter;
   });
 
@@ -76,8 +78,10 @@ export default function Tasks({ tasks, projects, onUpdate }: TasksProps) {
     setForm({ title: '', projectId: '', status: 'todo', priority: 'medium', dueDate: '' });
   };
 
-  const getProjectName = (projectId: string) => {
-    return projects.find((p) => p.id === projectId)?.title || 'Без проекта';
+  const getProject = (projectId: string) => projects.find((p) => p.id === projectId);
+  const getProjectClient = (projectId: string) => {
+    const project = getProject(projectId);
+    return project ? clients.find((c) => c.id === project.clientId) : undefined;
   };
 
   const statusIcons: Record<string, string> = {
@@ -151,45 +155,70 @@ export default function Tasks({ tasks, projects, onUpdate }: TasksProps) {
 
       {/* Task List */}
       <div className="space-y-2">
-        {filteredTasks.map((task) => (
-          <div
-            key={task.id}
-            className={`bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 hover:shadow-sm transition-shadow ${
-              task.status === 'done' ? 'opacity-60' : ''
-            }`}
-          >
-            {/* Status Toggle */}
-            <button
-              onClick={() => handleStatusToggle(task.id)}
-              className={`text-2xl ${statusColors[task.status]} hover:scale-110 transition-transform`}
-              title={statusLabels[task.status]}
+        {filteredTasks.map((task) => {
+          const project = getProject(task.projectId);
+          const client = getProjectClient(task.projectId);
+          return (
+            <div
+              key={task.id}
+              className={`bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition-shadow ${
+                task.status === 'done' ? 'opacity-60' : ''
+              }`}
             >
-              {statusIcons[task.status]}
-            </button>
+              <div className="flex items-center gap-4">
+                {/* Status Toggle */}
+                <button
+                  onClick={() => handleStatusToggle(task.id)}
+                  className={`text-2xl ${statusColors[task.status]} hover:scale-110 transition-transform`}
+                  title={statusLabels[task.status]}
+                >
+                  {statusIcons[task.status]}
+                </button>
 
-            {/* Task Info */}
-            <div className="flex-1 min-w-0">
-              <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                {task.title}
-              </p>
-              <div className="flex items-center gap-3 mt-1">
-                <span className="text-xs text-gray-400">📁 {getProjectName(task.projectId)}</span>
-                {task.dueDate && <span className="text-xs text-gray-400">📅 {task.dueDate}</span>}
+                {/* Task Info */}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                    {task.title}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                    {project && (
+                      <button
+                        onClick={() => onNavigate('projects', { highlight: project.id })}
+                        className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 hover:underline bg-blue-50 px-2 py-0.5 rounded-md transition-colors"
+                        title="Открыть проект"
+                      >
+                        📁 {project.title}
+                      </button>
+                    )}
+                    {client && (
+                      <button
+                        onClick={() => onNavigate('clients', { highlight: client.id })}
+                        className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 hover:underline bg-purple-50 px-2 py-0.5 rounded-md transition-colors"
+                        title="Открыть клиента"
+                      >
+                        👤 {client.name}
+                      </button>
+                    )}
+                    {task.dueDate && (
+                      <span className="text-xs text-gray-400">📅 {task.dueDate}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Priority */}
+                <span className="text-sm">
+                  {task.priority === 'high' ? '🔴' : task.priority === 'medium' ? '🟡' : '🟢'}
+                </span>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleEdit(task)} className="text-gray-400 hover:text-gray-700 text-sm">✏️</button>
+                  <button onClick={() => handleDelete(task.id)} className="text-gray-400 hover:text-red-600 text-sm">🗑️</button>
+                </div>
               </div>
             </div>
-
-            {/* Priority */}
-            <span className="text-sm">
-              {task.priority === 'high' ? '🔴' : task.priority === 'medium' ? '🟡' : '🟢'}
-            </span>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              <button onClick={() => handleEdit(task)} className="text-gray-400 hover:text-gray-700 text-sm">✏️</button>
-              <button onClick={() => handleDelete(task.id)} className="text-gray-400 hover:text-red-600 text-sm">🗑️</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredTasks.length === 0 && (

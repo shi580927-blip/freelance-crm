@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Transaction, Project, Client } from '../types';
 import { generateId } from '../data';
+import { formatMoney, DateRangeState, getDateRange, isDateInRange } from '../utils';
+import DateRangeSelector from './DateRangeSelector';
 
 interface FinancesProps {
   transactions: Transaction[];
@@ -13,6 +15,13 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
   const [showForm, setShowForm] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [filter, setFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [dateRange, setDateRange] = useState<DateRangeState>({
+    range: 'month',
+    startDate: '',
+    endDate: new Date().toISOString().split('T')[0],
+  });
+
+  const range = useMemo(() => getDateRange(dateRange), [dateRange]);
 
   const [form, setForm] = useState({
     type: 'income' as Transaction['type'],
@@ -24,12 +33,21 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
     date: '',
   });
 
-  const filteredTransactions = transactions
-    .filter((t) => filter === 'all' || t.type === filter)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  // Filter by date range and type
+  const filteredTransactions = useMemo(() => {
+    return transactions
+      .filter((t) => isDateInRange(t.date, range))
+      .filter((t) => filter === 'all' || t.type === filter)
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [transactions, range, filter]);
 
-  const totalIncome = transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-  const totalExpense = transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+  const periodTransactions = useMemo(
+    () => transactions.filter((t) => isDateInRange(t.date, range)),
+    [transactions, range]
+  );
+
+  const totalIncome = periodTransactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+  const totalExpense = periodTransactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
   const profit = totalIncome - totalExpense;
 
   const categories = ['Проект', 'Подписки', 'Оборудование', 'Обучение', 'Налоги', 'Маркетинг', 'Другое'];
@@ -39,10 +57,7 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
     if (editingTransaction) {
       onUpdate(transactions.map((t) => t.id === editingTransaction.id ? { ...t, ...form } : t));
     } else {
-      const newTransaction: Transaction = {
-        id: generateId(),
-        ...form,
-      };
+      const newTransaction: Transaction = { id: generateId(), ...form };
       onUpdate([...transactions, newTransaction]);
     }
     resetForm();
@@ -72,11 +87,8 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
     setForm({ type: 'income', category: '', amount: 0, description: '', projectId: '', clientId: '', date: '' });
   };
 
-  const formatMoney = (amount: number) =>
-    new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount);
-
-  // Expense by category
-  const expenseByCategory = transactions
+  // Expense by category (for period)
+  const expenseByCategory = periodTransactions
     .filter((t) => t.type === 'expense')
     .reduce((acc, t) => {
       acc[t.category] = (acc[t.category] || 0) + t.amount;
@@ -84,6 +96,22 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
     }, {} as Record<string, number>);
 
   const maxExpense = Math.max(...Object.values(expenseByCategory), 1);
+
+  // Income by category (for period)
+  const incomeByCategory = periodTransactions
+    .filter((t) => t.type === 'income')
+    .reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + t.amount;
+      return acc;
+    }, {} as Record<string, number>);
+
+  const maxIncome = Math.max(...Object.values(incomeByCategory), 1);
+
+  // Transaction count for period
+  const transactionCount = periodTransactions.length;
+  const avgTransaction = transactionCount > 0
+    ? periodTransactions.reduce((sum, t) => sum + t.amount, 0) / transactionCount
+    : 0;
 
   return (
     <div className="p-8 max-w-7xl mx-auto">
@@ -101,43 +129,73 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
         </button>
       </div>
 
+      {/* Date Range Selector */}
+      <DateRangeSelector state={dateRange} onChange={setDateRange} />
+
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-100 p-5">
-          <p className="text-sm text-green-600 font-medium">Доходы</p>
+          <p className="text-sm text-green-600 font-medium">Доходы за период</p>
           <p className="text-2xl font-bold text-green-700 mt-1">{formatMoney(totalIncome)}</p>
         </div>
         <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl border border-red-100 p-5">
-          <p className="text-sm text-red-600 font-medium">Расходы</p>
+          <p className="text-sm text-red-600 font-medium">Расходы за период</p>
           <p className="text-2xl font-bold text-red-700 mt-1">{formatMoney(totalExpense)}</p>
         </div>
         <div className={`rounded-xl border p-5 ${profit >= 0 ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100' : 'bg-gradient-to-br from-red-50 to-rose-50 border-red-100'}`}>
-          <p className={`text-sm font-medium ${profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>Прибыль</p>
+          <p className={`text-sm font-medium ${profit >= 0 ? 'text-blue-600' : 'text-red-600'}`}>Прибыль за период</p>
           <p className={`text-2xl font-bold mt-1 ${profit >= 0 ? 'text-blue-700' : 'text-red-700'}`}>{formatMoney(profit)}</p>
+        </div>
+        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl border border-purple-100 p-5">
+          <p className="text-sm text-purple-600 font-medium">Средний чек</p>
+          <p className="text-2xl font-bold text-purple-700 mt-1">{formatMoney(avgTransaction)}</p>
         </div>
       </div>
 
-      {/* Expense Breakdown */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Расходы по категориям</h2>
-        <div className="space-y-3">
-          {Object.entries(expenseByCategory).map(([category, amount]) => (
-            <div key={category}>
-              <div className="flex justify-between text-sm mb-1">
-                <span className="text-gray-600">{category}</span>
-                <span className="text-gray-800 font-medium">{formatMoney(amount)}</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2">
-                <div
-                  className="bg-red-400 h-2 rounded-full transition-all"
-                  style={{ width: `${(amount / maxExpense) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
-          {Object.keys(expenseByCategory).length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-4">Нет расходов</p>
-          )}
+      {/* Category Breakdowns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Expense Breakdown */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">📉 Расходы по категориям</h2>
+          <div className="space-y-3">
+            {Object.entries(expenseByCategory).length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">Нет расходов за период</p>
+            ) : (
+              Object.entries(expenseByCategory).map(([category, amount]) => (
+                <div key={category}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">{category}</span>
+                    <span className="text-gray-800 font-medium">{formatMoney(amount)}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="bg-red-400 h-2 rounded-full transition-all" style={{ width: `${(amount / maxExpense) * 100}%` }} />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Income Breakdown */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">📈 Доходы по категориям</h2>
+          <div className="space-y-3">
+            {Object.entries(incomeByCategory).length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">Нет доходов за период</p>
+            ) : (
+              Object.entries(incomeByCategory).map(([category, amount]) => (
+                <div key={category}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-600">{category}</span>
+                    <span className="text-gray-800 font-medium">{formatMoney(amount)}</span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2">
+                    <div className="bg-green-400 h-2 rounded-full transition-all" style={{ width: `${(amount / maxIncome) * 100}%` }} />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -158,6 +216,9 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
             {f.label}
           </button>
         ))}
+        <span className="ml-auto text-xs text-gray-400 self-center">
+          {filteredTransactions.length} транзакций
+        </span>
       </div>
 
       {/* Transactions List */}
@@ -204,7 +265,7 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
         {filteredTransactions.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             <p className="text-lg">Транзакций нет</p>
-            <p className="text-sm">Добавьте первую транзакцию</p>
+            <p className="text-sm">Добавьте первую транзакцию или измените период</p>
           </div>
         )}
       </div>
@@ -237,60 +298,20 @@ export default function Finances({ transactions, projects, clients, onUpdate }: 
                   📉 Расход
                 </button>
               </div>
-              <input
-                type="text"
-                placeholder="Описание *"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              />
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
+              <input type="text" placeholder="Описание *" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
                 <option value="">Выберите категорию *</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
+                {categories.map((c) => (<option key={c} value={c}>{c}</option>))}
               </select>
-              <input
-                type="number"
-                placeholder="Сумма (₽) *"
-                value={form.amount || ''}
-                onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })}
-                required
-                min="1"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              />
-              <input
-                type="date"
-                value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              />
-              <select
-                value={form.projectId}
-                onChange={(e) => setForm({ ...form, projectId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
+              <input type="number" placeholder="Сумма (₽) *" value={form.amount || ''} onChange={(e) => setForm({ ...form, amount: Number(e.target.value) })} required min="1" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
+              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} required className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300" />
+              <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
                 <option value="">Привязать к проекту (необязательно)</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
-                ))}
+                {projects.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
               </select>
-              <select
-                value={form.clientId}
-                onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
-              >
+              <select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-300">
                 <option value="">Привязать к клиенту (необязательно)</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {clients.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
               </select>
               <div className="flex gap-2 pt-2">
                 <button type="submit" className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-sm font-medium hover:bg-gray-800">
