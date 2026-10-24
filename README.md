@@ -133,4 +133,61 @@ Pull requests приветствуются! Для серьёзных измен
 
 ---
 
+## 🌐 Деплой на GitHub Pages
+
+### Шаг 1: Создайте репозиторий на GitHub
+
+1. Перейдите на [github.com](https://github.com)
+2. Нажмите **New repository** (зелёная кнопка)
+3. Заполните:
+   - **Repository name**: `freelance-crm` (или другое)
+   - **Description**: `CRM-система для фрилансеров`
+   - Выберите **Public** (для GitHub Pages)
+   - ❌ **НЕ** ставьте галочку "Add a README"
+4. Нажмите **Create repository**
+
+### Шаг 2: Загрузите код
+
+```bash
+# В папке с проектом
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/ВАШ_ЛОГИН/freelance-crm.git
+git push -u origin main
+```
+
+### Шаг 3: Включите GitHub Pages
+
+1. Откройте репозиторий на GitHub
+2. Перейдите в **Settings** (настройки)
+3. В меню слева выберите **Pages**
+4. В разделе **Build and deployment**:
+   - **Source**: выберите **GitHub Actions**
+5. ✅ Готово! Workflow уже настроен в `.github/workflows/deploy.yml`
+
+### Шаг 4: Дождитесь деплоя
+
+1. Перейдите во вкладку **Actions**
+2. Вы увидите запущенный workflow "Deploy to GitHub Pages"
+3. Дождитесь завершения (обычно 1-2 минуты)
+4. ✅ Ваш сайт будет доступен по адресу:
+   ```
+   https://ВАШ_ЛОГИН.github.io/freelance-crm/
+   ```
+
+### 🔄 Автоматические обновления
+
+Теперь при каждом `git push` в ветку `main` сайт будет автоматически пересобираться и деплоиться!
+
+### 🐛 Если что-то не работает
+
+1. Проверьте вкладку **Actions** — там видны логи сборки
+2. Убедитесь, что репозиторий **Public** (для бесплатного GitHub Pages)
+3. Проверьте, что в **Settings → Pages** выбрано **GitHub Actions**
+4. Подождите 5-10 минут после первого push (GitHub Pages может задерживаться)
+
+---
+
 Сделано с ❤️ для фрилансеров
