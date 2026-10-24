@@ -135,27 +135,55 @@ export default function Calendar({ projects, tasks, content, reminders, onUpdate
                 const isSelected = dateStr === selectedDate;
                 const isPastDay = dateStr < today;
 
+                // Map event colors to background colors
+                const getBgColor = (colorClass: string) => {
+                  if (colorClass.includes('blue')) return 'bg-blue-200';
+                  if (colorClass.includes('purple')) return 'bg-purple-200';
+                  if (colorClass.includes('pink')) return 'bg-pink-200';
+                  return 'bg-gray-200';
+                };
+
                 return (
                   <button
                     key={day}
                     onClick={() => setSelectedDate(dateStr)}
-                    className={`aspect-square rounded-lg p-1 flex flex-col items-center justify-start transition-colors border ${
+                    className={`aspect-square rounded-lg p-1 flex flex-col items-center justify-start transition-colors border relative overflow-hidden ${
                       isSelected
-                        ? 'border-blue-400 bg-blue-50'
+                        ? 'border-blue-400 ring-2 ring-blue-200'
                         : isCurrentDay
-                        ? 'border-blue-200 bg-blue-50/50'
-                        : 'border-transparent hover:bg-gray-50'
-                    } ${isPastDay ? 'opacity-50' : ''}`}
+                        ? 'border-blue-200'
+                        : 'border-transparent hover:border-gray-300'
+                    } ${isPastDay ? 'opacity-60' : ''}`}
                   >
-                    <span className={`text-xs font-medium ${isCurrentDay ? 'text-blue-600' : 'text-gray-700'}`}>
-                      {day}
-                    </span>
-                    {events.length > 0 && (
-                      <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center">
-                        {events.slice(0, 3).map((e) => (
-                          <div key={e.id} className={`w-1.5 h-1.5 rounded-full ${e.color}`} />
+                    {/* Background color blocks for multiple events */}
+                    {events.length > 1 && (
+                      <div className="absolute inset-0 flex">
+                        {events.slice(0, 4).map((e) => (
+                          <div
+                            key={e.id}
+                            className={`flex-1 ${getBgColor(e.color)}`}
+                          />
                         ))}
                       </div>
+                    )}
+                    
+                    {/* Single event - full background */}
+                    {events.length === 1 && (
+                      <div className={`absolute inset-0 ${getBgColor(events[0].color)} rounded-lg`} />
+                    )}
+                    
+                    {/* Day number */}
+                    <span className={`relative z-10 text-xs font-medium ${
+                      isCurrentDay ? 'text-blue-600 font-bold' : 'text-gray-700'
+                    }`}>
+                      {day}
+                    </span>
+                    
+                    {/* Event count badge for multiple events */}
+                    {events.length > 1 && (
+                      <span className="relative z-10 text-[9px] font-bold text-gray-700 mt-0.5 bg-white/70 px-1 rounded">
+                        {events.length}
+                      </span>
                     )}
                   </button>
                 );
